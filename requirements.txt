@@ -1,0 +1,13 @@
+praw
+requests
+python-dotenv
+typing-extensions
+transformers
+numpy
+scikit-learn
+# For Raspberry Pi, use torch version compatible with ARM or install via pip as needed 
+spacy 
+Flask
+gunicorn
+pandas
+Flask-Cors 

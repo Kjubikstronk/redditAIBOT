@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit AI Bot Dashboard - Enhanced with React</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'gradient': 'gradient 3s ease infinite',
+                        'float': 'float 3s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        gradient: {
+                            '0%, 100%': { 'background-position': '0% 50%' },
+                            '50%': { 'background-position': '100% 50%' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- React and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Lucide React Icons -->
+    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
+    
+    <style>
+        /* Additional custom styles for better integration */
+        .bg-gradient-to-br {
+            background: linear-gradient(to bottom right, var(--tw-gradient-stops));
+        }
+        
+        .backdrop-blur-sm {
+            backdrop-filter: blur(4px);
+        }
+        
+        .bg-clip-text {
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+        
+        .text-transparent {
+            color: transparent;
+        }
+
+        /* Preloader styles */
+        .preloader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease-out;
+        }
+
+        .preloader.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Preloader -->
+    <div id="preloader" class="preloader">
+        <div class="text-center">
+            <div class="inline-block p-4 bg-white/20 backdrop-blur-sm rounded-2xl border border-white/30 mb-4">
+                <svg class="animate-spin h-12 w-12 text-blue-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Loading Dashboard</h2>
+            <p class="text-gray-600">Initializing React components...</p>
+        </div>
+    </div>
+
+    <!-- React Dashboard Container -->
+    <div id="react-dashboard"></div>
+    
+    <!-- Fallback content for when JavaScript is disabled -->
+    <noscript>
+        <div class="min-h-screen flex items-center justify-center bg-gray-100">
+            <div class="text-center max-w-md mx-auto p-8 bg-white rounded-2xl shadow-xl">
+                <h1 class="text-3xl font-bold text-gray-800 mb-4">Reddit AI Detection Bot Dashboard</h1>
+                <p class="text-gray-600 mb-4">Please enable JavaScript to view the interactive dashboard with React components.</p>
+                <div class="text-sm text-gray-500">
+                    This dashboard uses modern React components for enhanced interactivity and visual appeal.
+                </div>
+            </div>
+        </div>
+    </noscript>
+    
+    <!-- Compiled React Bundle -->
+    <script src="{{ url_for('static', filename='js/dashboard-bundle.js') }}"></script>
+    
+    <script>
+        // Hide preloader once React app is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                const preloader = document.getElementById('preloader');
+                if (preloader) {
+                    preloader.classList.add('fade-out');
+                    setTimeout(() => preloader.remove(), 500);
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+body {
+    background-color: #f8f9fa;
+}
+
+.card {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    border: none;
+    height: 100%;
+}
+
+#verdict-chart {
+    max-height: 300px;
+}
+
+#activity-feed {
+    max-height: 400px;
+    overflow-y: auto;
+}

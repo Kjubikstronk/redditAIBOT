@@ -1,0 +1,42 @@
+# Product Requirements Document (PRD)
+
+## Project: Reddit AI Detection Bot (Hybrid, Cost-Efficient)
+
+### Overview
+A Reddit bot that analyzes comments for AI-generated content using a two-step hybrid approach:
+1. Local statistical checks (perplexity, burstiness, vocabulary richness)
+2. If suspicious, escalate to ZeroGPT API for advanced detection
+
+The bot should be efficient, minimize API calls, and be easy to deploy on Render.com or similar platforms.
+
+### Core Features
+- Monitor specified subreddits for new comments
+- Respond only when triggered (e.g., via mention or command)
+- Perform local checks (perplexity, burstiness, vocab richness)
+- If local check is suspicious, call ZeroGPT API
+- If local check is human-like, reply: "Local check suggests human writing."
+- Log all actions and decisions for transparency
+- Configurable thresholds for local checks
+- Environment variable support for API keys and config
+- Cost-efficient and lightweight (suitable for free/cheap hosting)
+
+### Technical Requirements
+- Language: Python
+- Libraries: praw, requests, numpy, nltk, transformers (for local checks)
+- Deployment: Render.com (Docker or native Python)
+- Config: .env file for secrets
+- Logging: to file and/or stdout
+
+### Stretch Goals
+- Support for multiple subreddits
+- Admin commands for tuning thresholds
+- Dashboard for monitoring usage and results
+
+### Non-Goals
+- No full moderation or removal of posts
+- No persistent database (log files only)
+
+### Success Criteria
+- Bot reliably detects and replies to AI/human comments
+- API usage is minimized and within free tier
+- Easy to deploy and maintain 

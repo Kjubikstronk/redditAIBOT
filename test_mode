@@ -1,0 +1,49 @@
+from bot import format_detection_results
+import json
+
+BATCH_LIMIT = 10
+
+while True:
+    text = input("Paste Reddit post/comment (or 'q' to quit, or 'batch' for batch test):\n")
+    if text.strip().lower() == 'q':
+        break
+    if text.strip().lower() == 'batch':
+        path = input("Path to JSONL file (default: filtered_posts.jsonl):\n").strip() or "filtered_posts.jsonl"
+        verdict_counts = {"🟢 Likely Human": 0, "🟡 Possibly AI-Generated": 0, "🔴 Potentially AI-Generated": 0}
+        misclassified = []
+        potentially_ai_file = open("potentially_ai_posts.jsonl", "w", encoding="utf-8")
+        with open(path, "r", encoding="utf-8") as f:
+            for i, line in enumerate(f, 1):
+                if i > BATCH_LIMIT:
+                    break
+                try:
+                    post = json.loads(line)
+                    text = (post.get("title", "") + "\n" + post.get("selftext", "")).strip()
+                    author = post.get("author", None)
+                    # Analyze with the bot's logic
+                    print(f"Analyzing post {i+1}/{len(posts)} from r/{post.get('subreddit', 'N/A')} by u/{author}")
+                    report, verdict = format_detection_results(text, author=author, skip_account=True)
+
+                    # Extract verdict from first non-empty line
+                    verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
+                    if verdict != "🟢 Likely Human":
+                        misclassified.append({"i": i, "verdict": verdict, "author": author, "text": text[:200]})
+                    if verdict == "🔴 Potentially AI-Generated":
+                        # Save full post and metadata for review
+                        out_obj = {"i": i, "verdict": verdict, "author": author, "title": post.get("title", ""), "selftext": post.get("selftext", ""), "id": post.get("id"), "subreddit": post.get("subreddit"), "created_utc": post.get("created_utc")}
+                        potentially_ai_file.write(json.dumps(out_obj, ensure_ascii=False) + "\n")
+                except Exception as e:
+                    print(f"Error on line {i}: {e}")
+        potentially_ai_file.close()
+        print(f"\nBatch test results (first {BATCH_LIMIT} posts):")
+        for v, c in verdict_counts.items():
+            print(f"{v}: {c}")
+        print(f"\nMisclassified (not 'Likely Human'): {len(misclassified)}")
+        for m in misclassified[:10]:
+            print(f"Line {m['i']}: {m['verdict']} | Author: {m['author']} | Text: {m['text']}")
+        print("---\n")
+        continue
+    author = input("Author username (or leave blank for none):\n").strip() or None
+    report = format_detection_results(text, author)
+    print(report)
+    print("---\n")
