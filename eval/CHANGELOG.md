@@ -49,6 +49,39 @@ heuristic-only number is not representative of production behavior once the
 key is set, but it's a useful sanity check that the harness and fairness
 slicing work correctly end-to-end.
 
+## 2026-07-17 — Closed the terse/non-native gap in the sample dataset
+
+- Added 6 genuine terse human posts (28–73 words) from r/tifu, sourced from
+  `dany0407/reddit_tifu_short` on Hugging Face — a mirror of the canonical
+  academic `reddit_tifu` dataset (Kim et al. 2019, posts from 2013–2018, so
+  definitively pre-LLM). Note: the original preprocessing lowercased all
+  text; that's authentic-looking for casual Reddit writing and shouldn't
+  bias the judge, but it's worth knowing the casing isn't the authors' own.
+  Two of the six carry clear non-native-English markers and are tagged
+  `non_native`; all six are tagged `terse`. Files: `human_seed_tifu.jsonl`.
+- Wrote 6 matched terse AI counterparts (3 generic LLM-styled, 3 disguised
+  casual-lowercase) in `ai_seed_tifu.jsonl`, and rebuilt
+  `sample_labeled_posts.jsonl` — now **36 examples (18 human / 18 ai)** with
+  every fairness tag represented: terse (6), formulaic (3),
+  no_contractions (3), non_native (2).
+
+**Expanded fallback-only baseline (still no API key):**
+
+| Metric | Value |
+|---|---|
+| Suspicious framing (🟡/🔴 = AI) | precision=0.50, recall=0.72, f1=0.59 |
+| Confident framing (only 🔴 = AI) | precision=0.455, recall=0.556, f1=0.50 |
+| FP rate: terse humans | 66.7% |
+| FP rate: non_native humans | 50.0% |
+| FP rate: formulaic humans | 66.7% |
+| FP rate: no_contractions humans | 66.7% |
+| FP rate: untagged humans | 83.3% |
+
+Same story as the first run, now with the previously-missing writer groups
+covered: the heuristic fallback is at coin-flip precision and flags half to
+four-fifths of real human writers in every category. The judge-based
+baseline (once the key is set) is the number that matters.
+
 ---
 
 ## Monthly production spot-checks

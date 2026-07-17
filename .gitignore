@@ -29,6 +29,8 @@ node_modules/
 eval/data/*.jsonl
 !eval/data/human_seed.jsonl
 !eval/data/ai_seed.jsonl
+!eval/data/human_seed_tifu.jsonl
+!eval/data/ai_seed_tifu.jsonl
 !eval/data/sample_labeled_posts.jsonl
 eval/results/
 
