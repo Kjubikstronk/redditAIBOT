@@ -1,26 +1,13 @@
 import os
+import re
 import praw
 from dotenv import load_dotenv
 import logging
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple
 from local_detection import (
-    burstiness, perplexity, vocabulary_richness, count_weird_spaces,
-    count_em_dashes, count_ellipses, count_fancy_quotes, detect_safe_phrases,
-    detect_repeated_sentence_starters, detect_slang_or_emoji, check_no_contractions,
-    check_long_word_overuse, gpt2_perplexity,
-    avg_sentence_length, avg_word_length, flesch_reading_ease, coherence_score,
-    detect_special_unicode_characters, count_overused_words, flesch_kincaid_grade_level,
-    noun_to_verb_ratio, personal_pronoun_ratio, pos_tag_distribution, named_entity_density, repeated_ngrams
+    perplexity, coherence_score, named_entity_density
 )
-
-# ML-Logik
-try:
-    import joblib
-    from sklearn.linear_model import LogisticRegression
-    import numpy as np
-    ML_AVAILABLE = True
-except ImportError:
-    ML_AVAILABLE = False
+from ai_judge import judge_text
 
 # Logging-Konfiguration
 logging.basicConfig(
@@ -83,20 +70,6 @@ def create_reddit_client(config: dict) -> praw.Reddit:
     )
 
 
-def load_ml_model(path: str = "ai_classifier.joblib"):
-    """
-    Loads a trained ML model from disk if available and ML dependencies are installed.
-    Returns the model or None.
-    """
-    if ML_AVAILABLE:
-        try:
-            return joblib.load(path)
-        except Exception as e:
-            logging.warning(f"Could not load ML model: {e}")
-            return None
-    return None
-
-
 def get_account_metrics(reddit: praw.Reddit, author: str, skip_account: bool = False) -> Tuple[Optional[int], Optional[int]]:
     """
     Fetches account age (in days) and total karma for a Reddit user using PRAW.
@@ -123,37 +96,19 @@ def get_account_metrics(reddit: praw.Reddit, author: str, skip_account: bool = F
         return None, None
 
 
-def extract_features(text: str, author: Optional[str] = None, reddit: Optional[praw.Reddit] = None) -> List:
-    """
-    Extracts all numerical features for ML. If reddit is provided and author is not None, fetches account metrics.
-    """
-    account_age_days, karma_score = (get_account_metrics(reddit, author) if reddit and author else (None, None))
-    return [
-        burstiness(text),
-        perplexity(text),
-        vocabulary_richness(text),
-        count_weird_spaces(text),
-        count_em_dashes(text),
-        count_ellipses(text),
-        count_fancy_quotes(text),
-        len(detect_safe_phrases(text)),
-        len(detect_repeated_sentence_starters(text)),
-        len(detect_slang_or_emoji(text)['slang']) + len(detect_slang_or_emoji(text)['emojis']),
-        int(not check_no_contractions(text)),
-        int(check_long_word_overuse(text)),
-        gpt2_perplexity(text),
-        avg_sentence_length(text),
-        avg_word_length(text),
-        flesch_reading_ease(text),
-        coherence_score(text),
-        detect_special_unicode_characters(text),
-        count_overused_words(text),
-        flesch_kincaid_grade_level(text),
-        noun_to_verb_ratio(text),
-        personal_pronoun_ratio(text),
-        account_age_days if account_age_days is not None else -1,
-        karma_score if karma_score is not None else -1,
-    ]
+def _reddit_story_signals(text: str) -> int:
+    """Counts weak human-authorship signals typical of Reddit relationship/advice posts."""
+    text_lower = text.lower()
+    signals = 0
+    if any(trigger in text_lower for trigger in ["aita", "am i the asshole"]):
+        signals += 1
+    if any(rel in text_lower for rel in ["my fiancé", "my fiance", "my husband", "my wife", "my sister", "my brother", "my parents", "my mom", "my dad", "wedding", "drama"]):
+        signals += 1
+    if re.search(r"\b\d{1,2}[mf]\b", text_lower):
+        signals += 1
+    if text_lower.strip().endswith("?"):
+        signals += 1
+    return signals
 
 
 def format_detection_results(
@@ -163,43 +118,69 @@ def format_detection_results(
     skip_account: bool = False
 ) -> Tuple[str, str]:
     """
-    Computes all detection metrics and returns a concise Markdown-formatted report string
-    and the final verdict as a simple string.
-    Aggressiveness increased: Reddit-story signals now +2, lower thresholds, and new contraction heuristic.
-    Logs all key metrics, suspicion score, and verdict for every post for post-analysis and tuning.
-    Logs the exact raw text being analyzed for comparison between bot and test_mode.
+    Judges whether `text` is likely AI-generated. Primary path calls an LLM judge
+    (Claude Sonnet 5) with local heuristics passed in as supporting, non-authoritative
+    context — statistical detectors alone are unreliable against modern AI writing.
+    Falls back to local heuristic scoring only if the LLM judge is unavailable (no
+    API key) or the call fails, so the bot degrades gracefully instead of going silent.
+    Logs the exact raw text and final verdict for post-analysis and tuning.
     """
-    import logging
-    # Log the exact raw text for comparison
     logging.debug(f"[COMPARE] RAW TEXT: {repr(text)}")
-    # Calculate key metrics
+
     perp = perplexity(text)
     coherence = coherence_score(text)
     entity_density = named_entity_density(text)
     account_age_days, karma_score = get_account_metrics(reddit, author, skip_account=skip_account) if author and reddit else (None, None)
     account_age_str = f"{account_age_days} days" if account_age_days is not None else "N/A"
-    # New heuristic: check for contractions
-    import re
     has_contractions = bool(re.search(r"\b(?:[A-Za-z]+n't|[A-Za-z]+'ll|[A-Za-z]+'ve|[A-Za-z]+'re|[A-Za-z]+'d|[A-Za-z]+'m|[A-Za-z]+'s)\b", text))
-
-    # --- Reddit-story heuristic (now more aggressive) ---
-    def reddit_story_signals(text: str) -> int:
-        text_lower = text.lower()
-        signals = 0
-        if any(trigger in text_lower for trigger in ["aita", "am i the asshole"]):
-            signals += 1
-        if any(rel in text_lower for rel in ["my fiancé", "my fiance", "my husband", "my wife", "my sister", "my brother", "my parents", "my mom", "my dad", "wedding", "drama"]):
-            signals += 1
-        if re.search(r"\b\d{1,2}[mf]\b", text_lower):
-            signals += 1
-        if text_lower.strip().endswith("?"):
-            signals += 1
-        return signals
-
-    reddit_signals = reddit_story_signals(text)
+    reddit_signals = _reddit_story_signals(text)
     word_count = len(text.split())
 
-    # --- AI suspicion score ---
+    if word_count < 15:
+        verdict = "🟢 Likely Human"
+        logging.info(f"[DEBUG] Verdict: {verdict} | Reason: text too short to judge ({word_count} words)")
+        report = f"""
+{verdict}
+_*Text too short to judge reliably.*_
+***
+*   **Account Age:** `{account_age_str}`
+***
+^I'm ^an ^experimental ^bot. ^Verdicts ^are ^an ^educated ^guess ^and ^may ^be ^inaccurate.
+"""
+        return report, verdict
+
+    heuristic_context = {
+        "perplexity": round(perp, 2),
+        "coherence_score": round(coherence, 2),
+        "named_entity_density_per_100_words": round(entity_density, 2),
+        "has_contractions": has_contractions,
+        "reddit_story_signal_count": reddit_signals,
+        "word_count": word_count,
+    }
+
+    judged = judge_text(text, heuristic_context)
+
+    if judged is not None:
+        verdict = judged["verdict"]
+        confidence = judged["confidence"]
+        reasoning = judged["reasoning"]
+        logging.info(
+            f"[LLM JUDGE] Verdict: {verdict} | Confidence: {confidence} | Reasoning: {reasoning} | "
+            f"Text: {text[:120].replace(chr(10), ' ')}..."
+        )
+        report = f"""
+{verdict}
+_{reasoning}_
+***
+*   **Confidence:** `{confidence}`
+*   **Account Age:** `{account_age_str}`
+***
+^I'm ^an ^experimental ^bot. ^Verdicts ^are ^an ^educated ^guess ^and ^may ^be ^inaccurate.
+"""
+        return report, verdict
+
+    # --- Fallback: local heuristic scoring, used only if the LLM judge is unavailable ---
+    logging.warning("LLM judge unavailable (no API key or request failed) — falling back to local heuristics.")
     ai_suspicion = 0
     if entity_density < 1 and perp < 10 and coherence > 0.9:
         ai_suspicion += 2
@@ -209,51 +190,31 @@ def format_detection_results(
         ai_suspicion += 1
     if perp > 80 and coherence < 0.25:
         ai_suspicion += 1
-    # More aggressive Reddit-story signal
     if reddit_signals >= 2 and word_count > 80 and coherence > 0.8:
         ai_suspicion += 2
-    # New heuristic: no contractions
     if not has_contractions and word_count > 10:
         ai_suspicion += 1
-    # If entity density is very high, nudge suspicion down by 1 (never below 0)
     if entity_density > 6:
         ai_suspicion = max(0, ai_suspicion - 1)
-    # If a post has many human-like Reddit signals, nudge suspicion down
     if reddit_signals >= 3:
         ai_suspicion = max(0, ai_suspicion - 1)
 
-    # Debug logging for all posts (not just failures)
-    debug_msg = (
-        f"[DEBUG] Verdict: {{}} | Perplexity: {perp:.2f}, Entity Density: {entity_density:.2f}, Coherence: {coherence:.2f}, "
-        f"Reddit Signals: {reddit_signals}, Has Contractions: {has_contractions}, AI Suspicion: {ai_suspicion}, "
-        f"Text: {text[:120].replace('\n',' ')}..."
-    )
-    logging.debug(debug_msg.format('PENDING'))  # Log before verdict for full trace
-
-    # Tuned thresholds to be less aggressive
-    verdict_explanation = ""
-    score_explanation = ""
-    if word_count < 15:
-        verdict = "🟢 Likely Human"
-        verdict_explanation = "*Based on a low AI signal score.*"
-        score_explanation = "*(a low score is a good sign)*"
-    elif ai_suspicion >= 2:
+    if ai_suspicion >= 2:
         verdict = "🔴 Potentially AI-Generated"
-        verdict_explanation = "*Based on a high AI signal score.*"
-        score_explanation = "*(a score of 2+ is a strong indicator)*"
+        verdict_explanation = "*Based on a high AI signal score (fallback heuristic — LLM judge unavailable).*"
     elif ai_suspicion == 1:
         verdict = "🟡 Possibly AI-Generated"
-        verdict_explanation = "*Based on a moderate AI signal score.*"
-        score_explanation = "*(a score of 1 is a moderate indicator)*"
+        verdict_explanation = "*Based on a moderate AI signal score (fallback heuristic — LLM judge unavailable).*"
     else:
         verdict = "🟢 Likely Human"
-        verdict_explanation = "*Based on a low AI signal score.*"
-        score_explanation = "*(a low score is a good sign)*"
+        verdict_explanation = "*Based on a low AI signal score (fallback heuristic — LLM judge unavailable).*"
 
-    # Log final verdict
-    logging.info(debug_msg.format(verdict))
+    logging.info(
+        f"[DEBUG][FALLBACK] Verdict: {verdict} | Perplexity: {perp:.2f}, Entity Density: {entity_density:.2f}, "
+        f"Coherence: {coherence:.2f}, Reddit Signals: {reddit_signals}, Has Contractions: {has_contractions}, "
+        f"AI Suspicion: {ai_suspicion}, Text: {text[:120].replace(chr(10), ' ')}..."
+    )
 
-    # Format the final report string
     report = f"""
 {verdict}
 _{verdict_explanation}_
@@ -261,7 +222,7 @@ _{verdict_explanation}_
 *   **AI Signal Score:** `{ai_suspicion}`
 *   **Account Age:** `{account_age_str}`
 ***
-^I'm ^an ^experimental ^bot. ^Scores ^are ^an ^educated ^guess ^and ^may ^be ^inaccurate.
+^I'm ^an ^experimental ^bot. ^Verdicts ^are ^an ^educated ^guess ^and ^may ^be ^inaccurate.
 """
     return report, verdict
 
@@ -274,7 +235,6 @@ def run_bot(config: dict):
     print("Loaded subreddits from config:", config['SUBREDDITS'])
     logging.info(f"Loaded subreddits from config: {config['SUBREDDITS']}")
     reddit = create_reddit_client(config)
-    ml_model = load_ml_model()
     REPLY_COOLDOWN = 12  # seconds between replies
     last_reply_time = 0
     try:
@@ -330,7 +290,6 @@ def run_bot(config: dict):
                             logging.info(f"Reply sent to comment {comment.id} by {comment.author} in r/{comment.subreddit}")
                         except APIException as e:
                             if getattr(e, 'error_type', None) == "RATELIMIT":
-                                import re
                                 m = re.search(r'(\d+) (minutes?|seconds?)', str(e))
                                 if m:
                                     val, unit = int(m.group(1)), m.group(2)

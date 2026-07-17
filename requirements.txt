@@ -2,11 +2,9 @@ praw
 requests
 python-dotenv
 typing-extensions
-transformers
+anthropic
 numpy
-scikit-learn
-# For Raspberry Pi, use torch version compatible with ARM or install via pip as needed 
-spacy 
+spacy
 Flask
 gunicorn
 pandas

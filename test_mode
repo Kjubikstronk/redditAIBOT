@@ -21,7 +21,7 @@ while True:
                     text = (post.get("title", "") + "\n" + post.get("selftext", "")).strip()
                     author = post.get("author", None)
                     # Analyze with the bot's logic
-                    print(f"Analyzing post {i+1}/{len(posts)} from r/{post.get('subreddit', 'N/A')} by u/{author}")
+                    print(f"Analyzing post {i}/{BATCH_LIMIT} from r/{post.get('subreddit', 'N/A')} by u/{author}")
                     report, verdict = format_detection_results(text, author=author, skip_account=True)
 
                     # Extract verdict from first non-empty line

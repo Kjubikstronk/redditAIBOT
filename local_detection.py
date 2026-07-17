@@ -102,44 +102,6 @@ def check_long_word_overuse(text: str, threshold: int = 10, min_length: int = 10
     long_words = [w for w in words if len(w) >= min_length]
     return len(long_words) > threshold
 
-# GPT-2 Perplexity mit kleinem Modell (für Raspberry Pi optimiert)
-try:
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    import torch
-    _gpt2_model = None
-    _gpt2_tokenizer = None
-except ImportError:
-    AutoModelForCausalLM = None
-    AutoTokenizer = None
-    torch = None
-    _gpt2_model = None
-    _gpt2_tokenizer = None
-
-def get_gpt2_model():
-    # Lädt das kleine GPT-2-Modell nur einmal (Singleton)
-    global _gpt2_model, _gpt2_tokenizer
-    if _gpt2_model is None or _gpt2_tokenizer is None:
-        if AutoTokenizer is None or AutoModelForCausalLM is None:
-            raise ImportError("transformers/torch nicht installiert")
-        # Kleinstes Modell für Performance (tiny-gpt2)
-        _gpt2_tokenizer = AutoTokenizer.from_pretrained("sshleifer/tiny-gpt2")
-        _gpt2_model = AutoModelForCausalLM.from_pretrained("sshleifer/tiny-gpt2")
-        _gpt2_model.eval()
-    return _gpt2_model, _gpt2_tokenizer
-
-# Berechnet die Perplexität mit GPT-2 (oder fallback)
-def gpt2_perplexity(text: str, max_length: int = 128) -> float:
-    try:
-        model, tokenizer = get_gpt2_model()
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=max_length)
-        with torch.no_grad():
-            outputs = model(**inputs, labels=inputs["input_ids"])
-            loss = outputs.loss
-        return float(torch.exp(loss))
-    except Exception as e:
-        # Fallback: gibt hohe Perplexität zurück, wenn Modell nicht verfügbar
-        return 100.0
-
 # Syntaktische Komplexität: Durchschnittliche Satzlänge (Wörter)
 def avg_sentence_length(text: str) -> float:
     sentences = re.split(r'[.!?]', text)
