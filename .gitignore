@@ -23,3 +23,16 @@ node_modules/
 
 # OS specific
 .DS_Store
+
+# Eval dataset/results — full dataset stays local-only (scraped/generated
+# text isn't ours to redistribute); only the small sample set is committed.
+eval/data/*.jsonl
+!eval/data/human_seed.jsonl
+!eval/data/ai_seed.jsonl
+!eval/data/sample_labeled_posts.jsonl
+eval/results/
+
+# Test artifacts
+.pytest_cache/
+__pycache__/
+*.pyc

@@ -116,7 +116,7 @@ def format_detection_results(
     author: Optional[str] = None,
     reddit: Optional[praw.Reddit] = None,
     skip_account: bool = False
-) -> Tuple[str, str]:
+) -> Tuple[str, str, Optional[float]]:
     """
     Judges whether `text` is likely AI-generated. Primary path calls an LLM judge
     (Claude Sonnet 5) with local heuristics passed in as supporting, non-authoritative
@@ -124,6 +124,11 @@ def format_detection_results(
     Falls back to local heuristic scoring only if the LLM judge is unavailable (no
     API key) or the call fails, so the bot degrades gracefully instead of going silent.
     Logs the exact raw text and final verdict for post-analysis and tuning.
+
+    Returns (report_markdown, verdict, confidence). `confidence` is the LLM judge's
+    self-reported confidence (0-1) when the judge path was used, or None on the
+    short-text short-circuit and the fallback heuristic path (which has no comparable
+    confidence concept).
     """
     logging.debug(f"[COMPARE] RAW TEXT: {repr(text)}")
 
@@ -147,7 +152,7 @@ _*Text too short to judge reliably.*_
 ***
 ^I'm ^an ^experimental ^bot. ^Verdicts ^are ^an ^educated ^guess ^and ^may ^be ^inaccurate.
 """
-        return report, verdict
+        return report, verdict, None
 
     heuristic_context = {
         "perplexity": round(perp, 2),
@@ -177,7 +182,7 @@ _{reasoning}_
 ***
 ^I'm ^an ^experimental ^bot. ^Verdicts ^are ^an ^educated ^guess ^and ^may ^be ^inaccurate.
 """
-        return report, verdict
+        return report, verdict, confidence
 
     # --- Fallback: local heuristic scoring, used only if the LLM judge is unavailable ---
     logging.warning("LLM judge unavailable (no API key or request failed) — falling back to local heuristics.")
@@ -224,7 +229,7 @@ _{verdict_explanation}_
 ***
 ^I'm ^an ^experimental ^bot. ^Verdicts ^are ^an ^educated ^guess ^and ^may ^be ^inaccurate.
 """
-    return report, verdict
+    return report, verdict, None
 
 
 def run_bot(config: dict):
@@ -279,7 +284,7 @@ def run_bot(config: dict):
                         if not post_text.strip():
                             logging.warning(f"Submission {getattr(submission, 'id', 'N/A')} has no text to analyze. Skipping reply.")
                             continue
-                        summary, verdict = format_detection_results(post_text, str(getattr(submission, 'author', 'N/A')), reddit)
+                        summary, verdict, confidence = format_detection_results(post_text, str(getattr(submission, 'author', 'N/A')), reddit)
                         
                         # Log the successful trigger to the user audit log WITH the verdict
                         user_logger.info(f"{comment.author} in r/{comment.subreddit} (Comment ID: {comment.id}) - Verdict: {verdict}")

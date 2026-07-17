@@ -58,7 +58,7 @@ def count_ellipses(text: str) -> int:
 
 # Zählt „fancy quotes“
 def count_fancy_quotes(text: str) -> int:
-    return sum(text.count(q) for q in ['"', '"', "'", "'"])
+    return sum(text.count(q) for q in ['“', '”', '‘', '’'])
 
 # Erkennt typische "Safe Phrases"
 def detect_safe_phrases(text: str) -> List[str]:

@@ -1,3 +1,11 @@
+import sys
+
+# Windows consoles default to a legacy codepage (cp1252) that can't encode
+# the emoji verdict strings printed below — reconfigure stdout to UTF-8 so
+# this doesn't crash mid-report on Windows.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from bot import format_detection_results
 import json
 
@@ -22,7 +30,7 @@ while True:
                     author = post.get("author", None)
                     # Analyze with the bot's logic
                     print(f"Analyzing post {i}/{BATCH_LIMIT} from r/{post.get('subreddit', 'N/A')} by u/{author}")
-                    report, verdict = format_detection_results(text, author=author, skip_account=True)
+                    report, verdict, confidence = format_detection_results(text, author=author, skip_account=True)
 
                     # Extract verdict from first non-empty line
                     verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
@@ -44,6 +52,8 @@ while True:
         print("---\n")
         continue
     author = input("Author username (or leave blank for none):\n").strip() or None
-    report = format_detection_results(text, author)
+    report, verdict, confidence = format_detection_results(text, author)
     print(report)
+    if confidence is not None:
+        print(f"(verdict={verdict}, confidence={confidence})")
     print("---\n")
