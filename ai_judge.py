@@ -5,7 +5,14 @@ from typing import Any, Dict, Optional
 
 import anthropic
 
+from budget_guard import DailyBudgetGuard
+
 MODEL = "claude-sonnet-5"
+
+# Defense-in-depth against a spam wave running up an unbounded API bill.
+# Also set a hard spend limit on the API key itself in the Anthropic
+# Console — that's enforced server-side and doesn't depend on this code.
+DEFAULT_DAILY_JUDGE_CALL_LIMIT = 200
 
 VERDICT_MAP = {
     "likely_human": "🟢 Likely Human",
@@ -41,6 +48,7 @@ MAX_TEXT_CHARS = 6000
 
 _client: Optional[anthropic.Anthropic] = None
 _client_checked = False
+_budget_guard: Optional[DailyBudgetGuard] = None
 
 
 def get_client() -> Optional[anthropic.Anthropic]:
@@ -54,6 +62,17 @@ def get_client() -> Optional[anthropic.Anthropic]:
     return _client
 
 
+def get_budget_guard() -> DailyBudgetGuard:
+    """Lazily creates the daily call-budget guard. Limit is read from
+    MAX_DAILY_JUDGE_CALLS (falls back to DEFAULT_DAILY_JUDGE_CALL_LIMIT)."""
+    global _budget_guard
+    if _budget_guard is None:
+        limit = int(os.getenv("MAX_DAILY_JUDGE_CALLS", DEFAULT_DAILY_JUDGE_CALL_LIMIT))
+        state_path = os.getenv("JUDGE_BUDGET_STATE_PATH", ".judge_budget_state.json")
+        _budget_guard = DailyBudgetGuard(limit=limit, state_path=state_path)
+    return _budget_guard
+
+
 def judge_text(text: str, heuristic_context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Judges whether `text` is likely AI-generated using Claude as an LLM judge, with
@@ -64,6 +83,13 @@ def judge_text(text: str, heuristic_context: Dict[str, Any]) -> Optional[Dict[st
     """
     client = get_client()
     if client is None:
+        return None
+
+    if not get_budget_guard().try_consume():
+        logging.warning(
+            f"Daily judge call budget exhausted ({get_budget_guard().limit}/day) — "
+            "falling back to heuristic scoring for the rest of today."
+        )
         return None
 
     context_lines = "\n".join(f"- {k}: {v}" for k, v in heuristic_context.items())

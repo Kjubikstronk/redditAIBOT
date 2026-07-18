@@ -38,3 +38,6 @@ eval/results/
 .pytest_cache/
 __pycache__/
 *.pyc
+
+# Runtime state
+.judge_budget_state.json

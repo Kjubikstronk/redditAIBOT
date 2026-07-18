@@ -132,6 +132,56 @@ def test_judge_text_does_not_call_api_without_client(monkeypatch):
     assert result is None
 
 
+# --- judge_text(): daily budget circuit breaker ---
+
+def test_judge_text_returns_none_and_skips_api_call_when_budget_exhausted(monkeypatch):
+    client = _mock_client_returning(json.dumps({"verdict": "likely_human", "confidence": 0.5, "reasoning": "x"}))
+    monkeypatch.setattr(ai_judge, "get_client", lambda: client)
+
+    exhausted_guard = MagicMock()
+    exhausted_guard.try_consume.return_value = False
+    monkeypatch.setattr(ai_judge, "get_budget_guard", lambda: exhausted_guard)
+
+    result = ai_judge.judge_text("some post text", {})
+
+    assert result is None
+    client.messages.create.assert_not_called()
+
+
+def test_judge_text_calls_api_when_budget_allows(monkeypatch):
+    payload = json.dumps({"verdict": "likely_ai", "confidence": 0.8, "reasoning": "y"})
+    client = _mock_client_returning(payload)
+    monkeypatch.setattr(ai_judge, "get_client", lambda: client)
+
+    allowing_guard = MagicMock()
+    allowing_guard.try_consume.return_value = True
+    monkeypatch.setattr(ai_judge, "get_budget_guard", lambda: allowing_guard)
+
+    result = ai_judge.judge_text("some post text", {})
+
+    assert result == {"verdict": "🔴 Potentially AI-Generated", "confidence": 0.8, "reasoning": "y"}
+    client.messages.create.assert_called_once()
+    allowing_guard.try_consume.assert_called_once()
+
+
+def test_get_budget_guard_reads_limit_from_env(monkeypatch):
+    monkeypatch.setattr(ai_judge, "_budget_guard", None)
+    monkeypatch.setenv("MAX_DAILY_JUDGE_CALLS", "42")
+
+    guard = ai_judge.get_budget_guard()
+
+    assert guard.limit == 42
+
+
+def test_get_budget_guard_defaults_when_env_unset(monkeypatch):
+    monkeypatch.setattr(ai_judge, "_budget_guard", None)
+    monkeypatch.delenv("MAX_DAILY_JUDGE_CALLS", raising=False)
+
+    guard = ai_judge.get_budget_guard()
+
+    assert guard.limit == ai_judge.DEFAULT_DAILY_JUDGE_CALL_LIMIT
+
+
 # --- live tests: real API calls, shape-only assertions ---
 
 @pytest.mark.live
