@@ -17,10 +17,19 @@ def reset_ai_judge_client_cache(monkeypatch, tmp_path):
     get_budget_guard(), which would otherwise write a real
     .judge_budget_state.json into the project directory as a test side
     effect — and could even interact with a real bot's actual daily budget
-    if the paths ever matched."""
+    if the paths ever matched.
+
+    Also no-ops load_dotenv() by default: get_client() calls the real
+    load_dotenv() (see its docstring), and since pytest runs with cwd =
+    project root, an unpatched call would read the *real* .env file —
+    including a real ANTHROPIC_API_KEY — and silently re-populate
+    os.environ after a test explicitly deleted it. Tests that specifically
+    want to exercise load_dotenv() behavior override this patch themselves
+    (see test_get_client_loads_dotenv_itself_without_relying_on_the_caller)."""
     monkeypatch.setattr(ai_judge, "_client", None)
     monkeypatch.setattr(ai_judge, "_client_checked", False)
     monkeypatch.setattr(ai_judge, "_budget_guard", None)
+    monkeypatch.setattr(ai_judge, "load_dotenv", lambda *a, **kw: None)
     monkeypatch.setenv("JUDGE_BUDGET_STATE_PATH", str(tmp_path / "test_judge_budget_state.json"))
 
 

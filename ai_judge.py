@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, Optional
 
 import anthropic
+from dotenv import load_dotenv
 
 from budget_guard import DailyBudgetGuard
 
@@ -55,10 +56,16 @@ _budget_guard: Optional[DailyBudgetGuard] = None
 
 
 def get_client() -> Optional[anthropic.Anthropic]:
-    """Lazily creates the Anthropic client. Returns None if no API key is configured."""
+    """Lazily creates the Anthropic client. Returns None if no API key is configured.
+
+    Calls load_dotenv() itself rather than relying on the caller having done
+    so — bot.py's load_config() and eval/build_dataset.py both call it, but
+    test_mode and eval/run_eval.py only import judge_text/format_detection_results
+    directly and never would otherwise, silently masking a real .env key."""
     global _client, _client_checked
     if not _client_checked:
         _client_checked = True
+        load_dotenv()
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if api_key:
             _client = anthropic.Anthropic(api_key=api_key)

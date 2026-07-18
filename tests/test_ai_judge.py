@@ -34,6 +34,24 @@ def test_get_client_returns_client_with_api_key(monkeypatch):
     assert ai_judge.get_client() == "fake-client-object"
 
 
+def test_get_client_loads_dotenv_itself_without_relying_on_the_caller(monkeypatch):
+    """Regression test: get_client() must not depend on some other module
+    (bot.py's load_config(), etc.) having already called load_dotenv(). A
+    caller that only does `from ai_judge import judge_text` — e.g. test_mode,
+    eval/run_eval.py — must still see a real ANTHROPIC_API_KEY from .env."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    def fake_load_dotenv(*args, **kwargs):
+        # Simulates what the real load_dotenv() does: populate os.environ
+        # from a .env file that get_client() didn't know to read itself.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "key-from-dotenv-file")
+
+    monkeypatch.setattr(ai_judge, "load_dotenv", fake_load_dotenv)
+    monkeypatch.setattr(ai_judge.anthropic, "Anthropic", lambda api_key: f"client-for-{api_key}")
+
+    assert ai_judge.get_client() == "client-for-key-from-dotenv-file"
+
+
 def test_get_client_caches_result(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-key-for-test")
     call_count = {"n": 0}
