@@ -7,6 +7,9 @@ import anthropic
 
 from budget_guard import DailyBudgetGuard
 
+# Default judge model. Override per-deployment with the JUDGE_MODEL env var —
+# e.g. run the live bot on the cheaper claude-haiku-4-5 while eval-testing on
+# claude-fable-5, so you pick the cheapest model that's accurate enough.
 MODEL = "claude-sonnet-5"
 
 # Defense-in-depth against a spam wave running up an unbounded API bill.
@@ -100,7 +103,7 @@ def judge_text(text: str, heuristic_context: Dict[str, Any]) -> Optional[Dict[st
 
     try:
         response = client.messages.create(
-            model=MODEL,
+            model=os.getenv("JUDGE_MODEL", MODEL),
             max_tokens=400,
             system=SYSTEM_PROMPT,
             output_config={"format": {"type": "json_schema", "schema": SCHEMA}},

@@ -82,12 +82,25 @@ def test_judge_text_passes_model_and_structured_output_config(monkeypatch):
     payload = json.dumps({"verdict": "likely_human", "confidence": 0.5, "reasoning": "x"})
     client = _mock_client_returning(payload)
     monkeypatch.setattr(ai_judge, "get_client", lambda: client)
+    monkeypatch.delenv("JUDGE_MODEL", raising=False)
 
     ai_judge.judge_text("some post text", {})
 
     _, kwargs = client.messages.create.call_args
-    assert kwargs["model"] == "claude-sonnet-5"
+    assert kwargs["model"] == "claude-sonnet-5"  # default when JUDGE_MODEL unset
     assert kwargs["output_config"] == {"format": {"type": "json_schema", "schema": ai_judge.SCHEMA}}
+
+
+def test_judge_text_uses_model_from_env(monkeypatch):
+    payload = json.dumps({"verdict": "likely_human", "confidence": 0.5, "reasoning": "x"})
+    client = _mock_client_returning(payload)
+    monkeypatch.setattr(ai_judge, "get_client", lambda: client)
+    monkeypatch.setenv("JUDGE_MODEL", "claude-haiku-4-5")
+
+    ai_judge.judge_text("some post text", {})
+
+    _, kwargs = client.messages.create.call_args
+    assert kwargs["model"] == "claude-haiku-4-5"
 
 
 def test_judge_text_returns_none_on_api_exception(monkeypatch):
