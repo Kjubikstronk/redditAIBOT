@@ -1,5 +1,7 @@
 # Reddit AI Detection Bot
 
+<img src="assets/banner.svg" alt="" width="960">
+
 A Reddit bot that judges whether a post is likely AI-generated using an LLM judge
 (Claude Sonnet 5), with local statistical signals (perplexity, coherence, named-entity
 density, etc.) passed in as supporting context rather than the deciding factor —
